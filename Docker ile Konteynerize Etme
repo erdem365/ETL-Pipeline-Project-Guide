@@ -1,0 +1,25 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["python", "src/main.py"]
+
+
+
+version: '3.8'
+services:
+  etl:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./output:/app/output
+      - ./config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
