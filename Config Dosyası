@@ -1,0 +1,37 @@
+input:
+  paths:
+    - "data/customers.csv"
+    - "data/orders.csv"
+    - "data/products.csv"
+  encoding: "utf-8"
+  date_columns: ["order_date", "birthdate"]
+
+cleaning:
+  drop_na_threshold: 0.5      # sütundaki NA oranı >0.5 ise drop
+  fill_na_strategy:
+    age: "median"
+    price: 0
+    city: "unknown"
+
+feature_engineering:
+  # Örnek: orders.csv içinde 'quantity' ve 'unit_price' varsa total_amount = quantity * unit_price
+  new_features:
+    - name: "total_amount"
+      formula: "quantity * unit_price"
+    - name: "order_year"
+      formula: "year(order_date)"
+    - name: "customer_age_group"
+      formula: "pd.cut(age, bins=[0,25,45,65,100], labels=['Genç','Orta','İleri','Yaşlı'])"
+
+output:
+  database_path: "output/etl_pipeline.db"
+  table_name: "enriched_orders"
+  if_exists: "replace"   # replace veya append
+
+logging:
+  level: "INFO"
+  file: "logs/etl.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+scheduling:
+  interval_seconds: 3600   # her saat başı çalıştır (opsiyonel)
