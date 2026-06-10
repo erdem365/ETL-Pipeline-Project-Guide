@@ -1,0 +1,71 @@
+# src/transform.py
+import pandas as pd
+import numpy as np
+import logging
+
+def clean_dataframe(df, col_config):
+    """Basit temizlik: boşluk, tip dönüşümü, NA yönetimi"""
+    # Sütun isimlerini temizle
+    df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
+    
+    # Tarih sütunlarını dönüştür
+    for col in col_config.get('date_columns', []):
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+    
+    # Drop threshold
+    thresh = config['cleaning']['drop_na_threshold']
+    df = df.dropna(thresh=len(df.columns) * (1 - thresh), axis=1)
+    
+    # Belirtilen sütunları doldur
+    fill_map = config['cleaning']['fill_na_strategy']
+    for col, strategy in fill_map.items():
+        if col in df.columns:
+            if strategy == 'median':
+                df[col] = df[col].fillna(df[col].median())
+            elif isinstance(strategy, (int, float)):
+                df[col] = df[col].fillna(strategy)
+            else:
+                df[col] = df[col].fillna(strategy)
+    return df
+
+def feature_engineering(df, feature_cfg):
+    """Yeni özellikler türet"""
+    for feat in feature_cfg['new_features']:
+        if feat['name'] == 'total_amount' and 'quantity' in df.columns and 'unit_price' in df.columns:
+            df[feat['name']] = df['quantity'] * df['unit_price']
+        elif feat['name'] == 'order_year' and 'order_date' in df.columns:
+            df[feat['name']] = df['order_date'].dt.year
+        # Daha karmaşık formüller için eval() veya apply kullanılabilir
+        # Bu örnekte sadece belirli kurallar eklendi.
+    return df
+
+def transform_pipeline(extracted_data, config):
+    df_customers = extracted_data.get('customers')
+    df_orders = extracted_data.get('orders')
+    df_products = extracted_data.get('products')
+    
+    if df_orders is None:
+        raise ValueError("orders.csv zorunludur")
+    
+    # 1. Temizlik
+    clean_cfg = config['cleaning']
+    if df_customers is not None:
+        df_customers = clean_dataframe(df_customers, config['input'])
+    if df_orders is not None:
+        df_orders = clean_dataframe(df_orders, config['input'])
+    if df_products is not None:
+        df_products = clean_dataframe(df_products, config['input'])
+    
+    # 2. Birleştirme: orders + customers + products
+    merged = df_orders
+    if df_customers is not None and 'customer_id' in merged.columns:
+        merged = merged.merge(df_customers, on='customer_id', how='left')
+    if df_products is not None and 'product_id' in merged.columns:
+        merged = merged.merge(df_products, on='product_id', how='left')
+    
+    # 3. Feature Engineering
+    merged = feature_engineering(merged, config['feature_engineering'])
+    
+    logging.info(f"Transform tamamlandı. Sonuç shape: {merged.shape}")
+    return merged
